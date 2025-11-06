@@ -180,41 +180,45 @@
       let enviadas = 0;
       const total = fotos.length;
 
-      const intervalo = setInterval(() => {
-        enviadas = Math.min(enviadas + 1, total);
+      // Pegue os valores ANTES do loop
+      const nota = document.getElementById('nota').value.trim();
+      const placa = document.getElementById('placa').value.trim();
+      const motorista = document.getElementById('motorista').value.trim();
+    
+      const atualizarProgresso = () => {
+        enviadas++;
         document.getElementById('progress-bar').style.width = (enviadas/total*100) + '%';
-        if (enviadas === total) {
-          clearInterval(intervalo);
-          sucesso();
-        }
-      }, 800);
-
+        if (enviadas === total) sucesso();
+      };
+    
       fotos.forEach((foto, i) => {
         const r = new FileReader();
         r.onload = () => {
           const b = r.result.split(',')[1];
           const dados = {
-            nota: document.getElementById('nota').value,
-            placa: document.getElementById('placa').value,
-            motorista: document.getElementById('motorista').value,
+            nota: nota,
+            placa: placa,
+            motorista: motorista,
             lat: lat,
             lng: lng,
-            nome: `${document.getElementById('nota').value}_${i+1}_${new Date().toISOString().slice(0,10)}.jpg`,
+            nome: `${nota}_${i+1}_${new Date().toISOString().slice(0,10)}.jpg`, // AQUI ESTÁ CORRETO
             file: b
           };
+    
           fetch('https://script.google.com/macros/s/AKfycbxc5jHtLbNHX2fkdiXek7_dxsbBMvGReKxLvYTxcBa1YOfrlJ5Fy0_5Lnrne8V5EBfaeQ/exec', {
             method: 'POST',
             body: JSON.stringify(dados),
             headers: {'Content-Type': 'text/plain'},
             mode: 'no-cors'
-          });
+          }).then(() => atualizarProgresso())
+            .catch(() => atualizarProgresso());
         };
         r.readAsDataURL(foto);
       });
-
+    
       function sucesso() {
         document.getElementById('ok').innerHTML="Tudo enviado! Abrindo WhatsApp...";
-        const msg = `Entrega ${document.getElementById('nota').value} com ${total} foto(s)!\nMotorista: ${document.getElementById('motorista').value}\nPlaca: ${document.getElementById('placa').value}\nLocal: https://maps.google.com/?q=${lat},${lng}`;
+        const msg = `Entrega ${nota} com ${total} foto(s)!\nMotorista: ${motorista}\nPlaca: ${placa}\nLocal: https://maps.google.com/?q=${lat},${lng}`;
         window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
         setTimeout(() => location.reload(), 3000);
       }
