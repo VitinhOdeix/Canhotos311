@@ -30,20 +30,50 @@
       font-size:16px;
       margin:0;
     }
+
+    /* FOTO DE EXEMPLO RESPONSIVA */
+    .obs p {
+      font-size: 14px;
+      line-height: 1.5;
+      margin: 10px 0;
+    }
+    .exemplo-container {
+      width: 90%;
+      max-width: 400px;
+      margin: 20px auto;
+      border: 2px dashed #007bff;
+      border-radius: 12px;
+      overflow: hidden;
+      background: #f0f8ff;
+      padding: 10px;
+      box-sizing: border-box;
+    }
+    .exemplo-img {
+      width: 100%;
+      height: auto;
+      max-height: 300px;
+      object-fit: contain;
+      border-radius: 8px;
+      display: block;
+      margin: 0 auto;
+    }
   </style>
 </head>
 <body>
   <div class="c">
     <img src="logo.png" alt="Extra Transportes" class="logo" onerror="this.style.display='none'">
     <h2>Comprovante de Entrega</h2>
+    
     <div class="obs">
-      ⚠️ Fotos devem ser nítidas e bem iluminadas.<br>
-      ⚠️ Fotos não Legiveis sera solicitado novo envio.<br>
-      ⚠️ Site vai solicitar permissões, clique em "Permitir" caso contrario nao conseguirá finalizar envio.
-    <div>
+      <p>⚠️ Fotos devem ser nítidas e bem iluminadas.<br>
+      ⚠️ Fotos não Legíveis serão solicitadas novamente.<br>
+      ⚠️ O site pedirá permissões — clique em "Permitir" para continuar.</p>
 
-    <img src="exemplo.jpg" alt="Foto de exemplo" class="exemplo-img" onerror="this.style.display='none'">
-      
+      <div class="exemplo-container">
+        <img src="exemplo.jpg" alt="Foto de exemplo" class="exemplo-img" onerror="this.style.display='none'">
+      </div>
+    </div>
+
     <input type="text" id="motorista" placeholder="Nome do Motorista" required>
     <input type="text" id="nota" placeholder="Número da Nota/CT-e" required>
     <input type="text" id="placa" placeholder="Placa (ex: ABC1D23)" maxlength="7" required>
@@ -175,22 +205,24 @@
     }
 
     function enviar(){
+      const envBtn = document.getElementById('env');
+      envBtn.disabled = true;
       document.getElementById('progress-container').style.display = 'block';
       document.getElementById('ok').innerHTML = "Enviando...";
       let enviadas = 0;
       const total = fotos.length;
 
-      // Pegue os valores ANTES do loop
+      // VALORES FIXOS FORA DO LOOP
       const nota = document.getElementById('nota').value.trim();
       const placa = document.getElementById('placa').value.trim();
       const motorista = document.getElementById('motorista').value.trim();
-    
+
       const atualizarProgresso = () => {
         enviadas++;
         document.getElementById('progress-bar').style.width = (enviadas/total*100) + '%';
         if (enviadas === total) sucesso();
       };
-    
+
       fotos.forEach((foto, i) => {
         const r = new FileReader();
         r.onload = () => {
@@ -201,10 +233,10 @@
             motorista: motorista,
             lat: lat,
             lng: lng,
-            nome: `${nota}_${i+1}_${new Date().toISOString().slice(0,10)}.jpg`, // AQUI ESTÁ CORRETO
+            nome: `${nota}_${i+1}_${new Date().toISOString().slice(0,10)}.jpg`,
             file: b
           };
-    
+
           fetch('https://script.google.com/macros/s/AKfycbzWTtciF7mYQmVz74N-1Sl5qTP9u7vf1TsQfzVnaNfxX29H3MRQkiA9op3K5Jz3sA23/exec', {
             method: 'POST',
             body: JSON.stringify(dados),
@@ -215,7 +247,7 @@
         };
         r.readAsDataURL(foto);
       });
-    
+
       function sucesso() {
         document.getElementById('ok').innerHTML="Tudo enviado! Abrindo WhatsApp...";
         const msg = `Entrega ${nota} com ${total} foto(s)!\nMotorista: ${motorista}\nPlaca: ${placa}\nLocal: https://maps.google.com/?q=${lat},${lng}`;
