@@ -57,13 +57,39 @@
       display: block;
       margin: 0 auto;
     }
+
+    /* LOADING */
+    #loading {
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: rgba(0,123,255,0.9);
+      color: white;
+      padding: 20px;
+      border-radius: 10px;
+      font-size: 16px;
+      z-index: 9999;
+      text-align: center;
+    }
+    .spinner {
+      border: 3px solid rgba(255,255,255,0.3);
+      border-top: 3px solid white;
+      border-radius: 50%;
+      width: 20px;
+      height: 20px;
+      animation: spin 1s linear infinite;
+      margin: 0 auto 10px;
+    }
+    @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
   </style>
 </head>
 <body>
   <div class="c">
     <img src="logo.png" alt="Extra Transportes" class="logo" onerror="this.style.display='none'">
     <h2>Comprovante de Entrega</h2>
-    
+
     <div class="obs">
       <p>⚠️ Fotos devem ser nítidas e bem iluminadas.<br>
       ⚠️ Fotos não Legíveis serão solicitadas novamente.<br>
@@ -82,6 +108,12 @@
     <div id="progress-container"><div id="progress-bar"></div></div>
     <button onclick="enviar()" id="env" style="display:none">Enviar para Transportadora</button>
     <p id="ok"></p>
+  </div>
+
+  <!-- LOADING -->
+  <div id="loading">
+    <div class="spinner"></div>
+    Processando foto com marca d'água...
   </div>
 
   <script>
@@ -135,54 +167,69 @@
       reader.onload = ev => {
         const img = new Image();
         img.onload = () => {
+          // REDIMENSIONA A IMAGEM (máx 800px largura)
+          const maxWidth = 800;
+          let { width, height } = img;
+          if (width > maxWidth) {
+            height = (height * maxWidth) / width;
+            width = maxWidth;
+          }
+
+          const canvas = document.createElement('canvas');
+          const ctx = canvas.getContext('2d');
+          canvas.width = width;
+          canvas.height = height;
+          ctx.drawImage(img, 0, 0, width, height);
+
           // Configuração do texto
-          const fontSize = Math.max(30, img.width / 20);
+          const fontSize = Math.max(24, width / 25);
           ctx.font = `bold ${fontSize}px Arial`;
           ctx.textAlign = 'left';
-          
+
           // Posições com mais espaço
-          const padding = 15;
-          const lineHeight = fontSize * 1.2;
-          const startY = img.height - lineHeight * 3.5; // Começa mais de cima
-          
+          const padding = 12;
+          const lineHeight = fontSize * 1.3;
+          const startY = height - lineHeight * 3.5;
+
           // Texto 1: ENTREGUE
           const text1 = 'ENTREGUE';
           const text1Width = ctx.measureText(text1).width + padding * 2;
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-          ctx.fillRect(20, startY - padding, text1Width, lineHeight);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(15, startY - padding, text1Width, lineHeight);
           ctx.fillStyle = 'white';
           ctx.strokeStyle = 'black';
-          ctx.lineWidth = 3;
-          ctx.strokeText(text1, 20 + padding, startY);
-          ctx.fillText(text1, 20 + padding, startY);
-          
+          ctx.lineWidth = 2.5;
+          ctx.strokeText(text1, 15 + padding, startY);
+          ctx.fillText(text1, 15 + padding, startY);
+
           // Texto 2: Data/Hora
-          ctx.font = `${fontSize * 0.8}px Arial`;
+          ctx.font = `${fontSize * 0.75}px Arial`;
           const dataHora = formatarDataHora();
           const text2Width = ctx.measureText(dataHora).width + padding * 2;
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-          ctx.fillRect(20, startY + lineHeight - padding, text2Width, lineHeight);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(15, startY + lineHeight - padding, text2Width, lineHeight);
           ctx.fillStyle = 'white';
           ctx.strokeStyle = 'black';
-          ctx.lineWidth = 2;
-          ctx.strokeText(dataHora, 20 + padding, startY + lineHeight);
-          ctx.fillText(dataHora, 20 + padding, startY + lineHeight);
-          
+          ctx.lineWidth = 1.5;
+          ctx.strokeText(dataHora, 15 + padding, startY + lineHeight);
+          ctx.fillText(dataHora, 15 + padding, startY + lineHeight);
+
           // Texto 3: GPS
           const gps = `${lat}, ${lng}`;
           const text3Width = ctx.measureText(gps).width + padding * 2;
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
-          ctx.fillRect(20, startY + lineHeight * 2 - padding, text3Width, lineHeight);
+          ctx.fillStyle = 'rgba(0, 0, 0, 0.7)';
+          ctx.fillRect(15, startY + lineHeight * 2 - padding, text3Width, lineHeight);
           ctx.fillStyle = 'white';
           ctx.strokeStyle = 'black';
-          ctx.lineWidth = 2;
-          ctx.strokeText(gps, 20 + padding, startY + lineHeight * 2);
-          ctx.fillText(gps, 20 + padding, startY + lineHeight * 2);
-    
+          ctx.lineWidth = 1.5;
+          ctx.strokeText(gps, 15 + padding, startY + lineHeight * 2);
+          ctx.fillText(gps, 15 + padding, startY + lineHeight * 2);
+
+          // GERA A IMAGEM
           canvas.toBlob(blob => {
-            const novoArquivo = new File([blob], file.name, { type: 'image/jpeg' });
+            const novoArquivo = new File([blob], `entrega_${Date.now()}.jpg`, { type: 'image/jpeg' });
             callback(novoArquivo);
-          }, 'image/jpeg', 0.9);
+          }, 'image/jpeg', 0.85);
         };
         img.src = ev.target.result;
       };
@@ -190,12 +237,17 @@
     }
 
     function tirarFoto() {
+      document.getElementById('loading').style.display = 'block';
       const i = document.createElement('input');
       i.type = 'file'; i.accept = 'image/*'; i.capture = 'environment';
       i.onchange = e => {
         const file = e.target.files[0];
-        if (!file) return;
+        if (!file) {
+          document.getElementById('loading').style.display = 'none';
+          return;
+        }
         adicionarMarcaDagua(file, arquivoComMarca => {
+          document.getElementById('loading').style.display = 'none';
           const div = document.createElement('div');
           div.className = 'foto-prev';
           const img = document.createElement('img');
@@ -244,7 +296,6 @@
       let enviadas = 0;
       const total = fotos.length;
 
-      // VALORES FIXOS FORA DO LOOP
       const nota = document.getElementById('nota').value.trim();
       const placa = document.getElementById('placa').value.trim();
       const motorista = document.getElementById('motorista').value.trim();
