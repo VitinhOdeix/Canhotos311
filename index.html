@@ -106,7 +106,7 @@
     
       const dados = { acao: "verificarPlaca", placa };
     
-      fetch('https://script.google.com/macros/s/AKfycbxcEmSAb1mmsb2PteVw7v2Kg1U1I1h__Q2DeP3pgb-P9a4Pf0dKfooPxR4xcHdPquWMVQ/exec', {
+      fetch('https://script.google.com/macros/s/AKfycbxC7BUdEpkhHFyriEmRM3gskf75mctueA42Zvb7bMneO7isL-1MQ9Hs9UXVWgfMNonFrg/exec', {
         method: 'POST',
         body: JSON.stringify(dados),
         headers: { 'Content-Type': 'application/json' }, // CORRIGIDO AQUI
@@ -269,7 +269,7 @@
             nome: `${nota}_${i+1}_${placaUsada}.jpg`,
             file: b
           };
-          fetch('https://script.google.com/macros/s/AKfycbxcEmSAb1mmsb2PteVw7v2Kg1U1I1h__Q2DeP3pgb-P9a4Pf0dKfooPxR4xcHdPquWMVQ/exec', {
+          fetch('https://script.google.com/macros/s/AKfycbxC7BUdEpkhHFyriEmRM3gskf75mctueA42Zvb7bMneO7isL-1MQ9Hs9UXVWgfMNonFrg/exec', {
             method: 'POST',
             body: JSON.stringify(dados),
             headers: {'Content-Type': 'text/plain'},
