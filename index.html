@@ -68,13 +68,203 @@
   </div>
 
   <script>
-    // URL DO SEU WEB APP (ATUALIZADA!)
+    // === CÓDIGO DO .TXT (PRIMEIRO) ===
     const URL = 'https://script.google.com/macros/s/AKfycbxIFoPXrDQhcgcliGEV1YUKqbBwDfSxAasilF4nwjz1t1_NwghcHMxUFe0DW5SdC0aRbw/exec';
+    let tentativasConexao = 0;
 
+    // 1. VERIFICAR CONEXÃO
+    function verificarConexao() {
+      if (!navigator.onLine) {
+        throw new Error('SEM_INTERNET');
+      }
+    }
+
+    // 2. FETCH COM TIMEOUT E RETRY
+    async function fetchSeguro(url, options, maxRetries = 3, timeout = 30000) {
+      verificarConexao();
+      
+      for (let tentativa = 0; tentativa < maxRetries; tentativa++) {
+        try {
+          const controller = new AbortController();
+          const timeoutId = setTimeout(() => controller.abort(), timeout);
+          
+          const response = await fetch(url, {
+            ...options,
+            signal: controller.signal
+          });
+          
+          clearTimeout(timeoutId);
+          
+          if (!response.ok) {
+            throw new Error(`HTTP_${response.status}`);
+          }
+          
+          const text = await response.text();
+          try {
+            return JSON.parse(text);
+          } catch (e) {
+            console.error('Resposta não-JSON:', text);
+            throw new Error('FORMATO_INVALIDO');
+          }
+          
+        } catch (error) {
+          const isLastAttempt = tentativa === maxRetries - 1;
+          
+          if (error.name === 'AbortError') {
+            console.error('Timeout na tentativa', tentativa + 1);
+            if (isLastAttempt) throw new Error('TIMEOUT');
+          } else if (isLastAttempt) {
+            throw error;
+          }
+          
+          const delay = Math.pow(2, tentativa) * 1000;
+          await new Promise(resolve => setTimeout(resolve, delay));
+        }
+      }
+    }
+
+    // 3. ENVIAR COM TRATAMENTO COMPLETO
+    async function enviar() {
+      if (!placaAutorizada) {
+        mostrarErro('Placa não autorizada!');
+        return;
+      }
+      
+      const envBtn = document.getElementById('env');
+      envBtn.disabled = true;
+      
+      try {
+        verificarConexao();
+        
+        document.getElementById('progress-container').style.display = 'block';
+        document.getElementById('ok').innerHTML = "Enviando...";
+        
+        const nota = document.getElementById('nota').value.trim();
+        const motorista = document.getElementById('motorista').value.trim();
+        
+        for (let i = 0; i < fotos.length; i++) {
+          const foto = fotos[i];
+          
+          try {
+            const b64 = await lerArquivoBase64(foto);
+            
+            const dados = {
+              acao: "enviarFoto",
+              nota: nota,
+              placa: placaUsada,
+              motorista: motorista,
+              lat: lat,
+              lng: lng,
+              nome: `${nota}_${i+1}_${placaUsada}.jpg`,
+              file: b64
+            };
+            
+            const resultado = await fetchSeguro(URL, {
+              method: 'POST',
+              body: JSON.stringify(dados),
+              headers: { 'Content-Type': 'text/plain' }  // ← Evita CORS
+            });
+            
+            if (resultado.status !== 'OK') {
+              throw new Error(resultado.message || 'Erro no servidor');
+            }
+            
+            const progresso = ((i + 1) / fotos.length) * 100;
+            document.getElementById('progress-bar').style.width = progresso + '%';
+            
+          } catch (erro) {
+            console.error(`Erro ao enviar foto ${i + 1}:`, erro);
+            throw new Error(`Falha na foto ${i + 1}: ${erro.message}`);
+          }
+        }
+        
+        sucesso();
+        
+      } catch (erro) {
+        envBtn.disabled = false;
+        tratarErro(erro);
+      }
+    }
+
+    // 4. TRATAR ERROS
+    function tratarErro(erro) {
+      let mensagem = '';
+      let sugestao = '';
+      
+      switch (erro.message) {
+        case 'SEM_INTERNET':
+          mensagem = 'Sem conexão com a internet';
+          sugestao = 'Conecte-se ao WiFi ou dados móveis e tente novamente.';
+          break;
+        case 'TIMEOUT':
+          mensagem = 'Tempo esgotado';
+          sugestao = 'Sua conexão está lenta. Tente em um local com melhor sinal.';
+          break;
+        case 'FORMATO_INVALIDO':
+          mensagem = 'Erro no servidor';
+          sugestao = 'O servidor retornou uma resposta inválida. Contate o suporte.';
+          break;
+        default:
+          if (erro.message.includes('HTTP_')) {
+            const status = erro.message.split('_')[1];
+            mensagem = `Erro HTTP ${status}`;
+            sugestao = status === '429' ? 'Muitas requisições. Aguarde 1 minuto.' : 'Problema no servidor. Tente novamente.';
+          } else {
+            mensagem = 'Erro desconhecido';
+            sugestao = erro.message;
+          }
+      }
+      
+      document.getElementById('ok').innerHTML = `
+        <div style="color: #d00;">
+          <strong>${mensagem}</strong><br>
+          <span style="font-size: 14px;">${sugestao}</span>
+        </div>
+      `;
+    }
+
+    // 5. HELPER: LER ARQUIVO
+    function lerArquivoBase64(file) {
+      return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = e => resolve(e.target.result.split(',')[1]);
+        reader.onerror = reject;
+        reader.readAsDataURL(file);
+      });
+    }
+
+    // 6. LISTENERS PARA CONEXÃO
+    window.addEventListener('online', () => {
+      console.log('Internet restaurada');
+      document.getElementById('ok').innerHTML = 'Internet restaurada!';
+    });
+
+    window.addEventListener('offline', () => {
+      console.log('Internet perdida');
+      alert('Conexão perdida! Não envie fotos até reconectar.');
+    });
+
+    function sucesso() {
+      const total = fotos.length;
+      const nota = document.getElementById('nota').value.trim();
+      const motorista = document.getElementById('motorista').value.trim();
+      
+      document.getElementById('ok').innerHTML = "Tudo enviado! Abrindo WhatsApp...";
+      
+      const msg = `Entrega ${nota} com ${total} foto(s)!\nMotorista: ${motorista}\nPlaca: ${placaUsada}\nLocal: https://maps.google.com/?q=${lat},${lng}`;
+      window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
+      
+      setTimeout(() => location.reload(), 3000);
+    }
+
+    function mostrarErro(msg) {
+      document.getElementById('ok').innerHTML = `<div style="color:#d00"><strong>${msg}</strong></div>`;
+    }
+
+    // === RESTO DO CÓDIGO (DEPOIS DO .TXT) ===
     let fotos = [], lat = null, lng = null, gpsPronto = false;
     let placaAutorizada = false, placaUsada = "";
 
-    // Validação de placa
     document.getElementById('placa').addEventListener('input', function(e) {
       let v = e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, '');
       if (v.length > 7) v = v.slice(0,7);
@@ -82,119 +272,81 @@
     });
 
     function validarPlaca(placa) {
-      const padrao1 = /^[A-Z]{3}\d[A-Z]\d{2}$/;
-      const padrao2 = /^[A-Z]{3}\d{4}$/;
-      return padrao1.test(placa) || padrao2.test(placa);
+      return /^[A-Z]{3}\d[A-Z]\d{2}$/.test(placa) || /^[A-Z]{3}\d{4}$/.test(placa);
     }
 
     function formatarDataHora() {
-      const agora = new Date();
-      const dia = String(agora.getDate()).padStart(2, '0');
-      const mes = String(agora.getMonth() + 1).padStart(2, '0');
-      const ano = agora.getFullYear();
-      const hora = String(agora.getHours()).padStart(2, '0');
-      const min = String(agora.getMinutes()).padStart(2, '0');
-      return `${dia}/${mes}/${ano} ${hora}:${min}`;
+      const d = new Date();
+      return `${String(d.getDate()).padStart(2,'0')}/${String(d.getMonth()+1).padStart(2,'0')}/${d.getFullYear()} ${String(d.getHours()).padStart(2,'0')}:${String(d.getMinutes()).padStart(2,'0')}`;
     }
 
-    // === VERIFICA PLACA CORRETAMENTE ===
-    function verificarPlaca() {
+    async function verificarPlaca() {
       const placa = document.getElementById('placa').value.trim();
-      if (!placa) return alert("Digite a placa!");
-      if (!validarPlaca(placa)) return alert("Placa inválida!");
+      if (!placa || !validarPlaca(placa)) return alert("Placa inválida!");
 
       const msg = document.getElementById('msg');
-      msg.innerHTML = "Verificando na planilha...";
-      msg.className = "msg";
-      const btn = event.target;
-      btn.disabled = true;
+      msg.innerHTML = "Verificando..."; msg.className = "msg";
+      const btn = event.target; btn.disabled = true;
 
-      fetch(URL, {
-        method: 'POST',
-        body: JSON.stringify({ acao: "verificarPlaca", placa }),
-        headers: { 'Content-Type': 'text/plain' }
-      })
-      .then(r => r.text())
-      .then(text => {
+      try {
+        const data = await fetchSeguro(URL, {
+          method: 'POST',
+          body: JSON.stringify({ acao: "verificarPlaca", placa }),
+          headers: { 'Content-Type': 'text/plain' }
+        });
+
         btn.disabled = false;
-        try {
-          const data = JSON.parse(text);
-          if (data.status === "OK") {
-            placaAutorizada = true;
-            placaUsada = placa;
-            msg.innerHTML = "Placa autorizada! Preencha os dados.";
-            msg.className = "msg ok";
-            document.getElementById('app').classList.remove('hidden');
-          } else {
-            msg.innerHTML = data.message || "Placa não autorizada";
-            msg.className = "msg";
-          }
-        } catch (e) {
-          msg.innerHTML = "Erro no servidor: " + text;
-          msg.className = "msg";
+        if (data.status === "OK") {
+          placaAutorizada = true; placaUsada = placa;
+          msg.innerHTML = "Placa autorizada!"; msg.className = "msg ok";
+          document.getElementById('app').classList.remove('hidden');
+        } else {
+          msg.innerHTML = data.message || "Placa não autorizada";
         }
-      })
-      .catch(err => {
+      } catch (erro) {
         btn.disabled = false;
-        msg.innerHTML = "Erro de conexão: " + err.message;
-        msg.className = "msg";
-      });
-    }
-
-    function iniciar() {
-      if (!placaAutorizada) return alert("Verifique a placa primeiro!");
-      const motorista = document.getElementById('motorista').value.trim();
-      const nota = document.getElementById('nota').value.trim();
-      if (!motorista || !nota) return alert("Preencha todos os campos!");
-
-      if (!gpsPronto) {
-        if (!navigator.geolocation) return alert("GPS não disponível");
-        navigator.geolocation.getCurrentPosition(pos => {
-          lat = pos.coords.latitude.toFixed(6);
-          lng = pos.coords.longitude.toFixed(6);
-          gpsPronto = true;
-          tirarFoto();
-        }, () => alert("Permita o GPS!"));
-      } else {
-        tirarFoto();
+        tratarErro(erro);
       }
     }
 
-    function adicionarMarcaDagua(file, callback) {
-      const reader = new FileReader();
-      reader.onload = ev => {
+    function iniciar() {
+      if (!placaAutorizada) return alert("Verifique a placa!");
+      const m = document.getElementById('motorista').value.trim();
+      const n = document.getElementById('nota').value.trim();
+      if (!m || !n) return alert("Preencha todos os campos!");
+
+      if (!gpsPronto) {
+        navigator.geolocation.getCurrentPosition(p => {
+          lat = p.coords.latitude.toFixed(6);
+          lng = p.coords.longitude.toFixed(6);
+          gpsPronto = true;
+          tirarFoto();
+        }, () => alert("Permita o GPS!"));
+      } else tirarFoto();
+    }
+
+    function adicionarMarcaDagua(file, cb) {
+      const r = new FileReader();
+      r.onload = e => {
         const img = new Image();
         img.onload = () => {
-          const canvas = document.createElement('canvas');
-          const ctx = canvas.getContext('2d');
-          canvas.width = img.width;
-          canvas.height = img.height;
+          const c = document.createElement('canvas');
+          const ctx = c.getContext('2d');
+          c.width = img.width; c.height = img.height;
           ctx.drawImage(img, 0, 0);
-
-          ctx.fillStyle = 'rgba(0, 0, 0, 0.5)';
+          ctx.fillStyle = 'rgba(0,0,0,0.5)';
           ctx.fillRect(0, img.height - 110, img.width, 110);
-
-          ctx.font = 'bold 35px Arial';
-          ctx.fillStyle = '#00ff00';
-          ctx.textAlign = 'right';
+          ctx.font = 'bold 35px Arial'; ctx.fillStyle = '#0f0'; ctx.textAlign = 'right';
           ctx.fillText('ENTREGUE', img.width - 20, img.height - 70);
-
-          ctx.font = '22px Arial';
-          ctx.fillStyle = '#ffffff';
+          ctx.font = '22px Arial'; ctx.fillStyle = '#fff';
           ctx.fillText(formatarDataHora(), img.width - 20, img.height - 40);
-
-          ctx.font = '22px Arial';
-          ctx.fillStyle = '#ffff00';
+          ctx.fillStyle = '#ff0';
           ctx.fillText(`${lat}, ${lng}`, img.width - 20, img.height - 10);
-
-          canvas.toBlob(blob => {
-            const novoArquivo = new File([blob], file.name, { type: 'image/jpeg' });
-            callback(novoArquivo);
-          }, 'image/jpeg', 0.9);
+          c.toBlob(b => cb(new File([b], file.name, {type:'image/jpeg'})), 'image/jpeg', 0.9);
         };
-        img.src = ev.target.result;
+        img.src = e.target.result;
       };
-      reader.readAsDataURL(file);
+      r.readAsDataURL(file);
     }
 
     function tirarFoto() {
@@ -202,30 +354,18 @@
       const i = document.createElement('input');
       i.type = 'file'; i.accept = 'image/*'; i.capture = 'environment';
       i.onchange = e => {
-        const file = e.target.files[0];
-        if (!file) {
+        const f = e.target.files[0];
+        if (!f) { document.getElementById('loading').style.display = 'none'; return; }
+        adicionarMarcaDagua(f, nf => {
           document.getElementById('loading').style.display = 'none';
-          return;
-        }
-        adicionarMarcaDagua(file, arquivoComMarca => {
-          document.getElementById('loading').style.display = 'none';
-          const div = document.createElement('div');
-          div.className = 'foto-prev';
-          const img = document.createElement('img');
-          img.src = URL.createObjectURL(arquivoComMarca);
-          img.style.width = '100%'; img.style.height = '100%'; img.style.objectFit = 'cover';
-          const remover = document.createElement('div');
-          remover.textContent = 'X';
-          remover.className = 'remover';
-          remover.onclick = () => {
-            fotos = fotos.filter(f => f !== arquivoComMarca);
-            div.remove();
-            atualizarBotao();
-          };
-          div.appendChild(img);
-          div.appendChild(remover);
-          document.getElementById('fotos').appendChild(div);
-          fotos.push(arquivoComMarca);
+          const d = document.createElement('div'); d.className = 'foto-prev';
+          const img = document.createElement('img'); img.src = URL.createObjectURL(nf);
+          img.style.width = img.style.height = '100%'; img.style.objectFit = 'cover';
+          const x = document.createElement('div'); x.textContent = 'X'; x.className = 'remover';
+          x.onclick = () => { fotos = fotos.filter(ff => ff !== nf); d.remove(); atualizarBotao(); };
+          d.appendChild(img); d.appendChild(x);
+          document.getElementById('fotos').appendChild(d);
+          fotos.push(nf);
           mostrarAdicionarMais();
         });
       };
@@ -233,71 +373,17 @@
     }
 
     function mostrarAdicionarMais() {
-      const existente = document.querySelector('.camera-actions');
-      if (existente) existente.remove();
-      const actions = document.createElement('div');
-      actions.className = 'camera-actions';
-      const btnMais = document.createElement('button');
-      btnMais.textContent = 'Adicionar Mais';
-      btnMais.onclick = tirarFoto;
-      actions.appendChild(btnMais);
-      document.getElementById('fotos').appendChild(actions);
+      const ex = document.querySelector('.camera-actions');
+      if (ex) ex.remove();
+      const a = document.createElement('div'); a.className = 'camera-actions';
+      const b = document.createElement('button'); b.textContent = 'Adicionar Mais'; b.onclick = tirarFoto;
+      a.appendChild(b);
+      document.getElementById('fotos').appendChild(a);
       atualizarBotao();
     }
 
     function atualizarBotao() {
       document.getElementById('env').style.display = fotos.length > 0 ? 'block' : 'none';
-    }
-
-    function enviar() {
-      if (!placaAutorizada) return alert("Placa não autorizada!");
-      const envBtn = document.getElementById('env');
-      envBtn.disabled = true;
-      document.getElementById('progress-container').style.display = 'block';
-      document.getElementById('ok').innerHTML = "Enviando...";
-      let enviadas = 0;
-      const total = fotos.length;
-      const nota = document.getElementById('nota').value.trim();
-      const motorista = document.getElementById('motorista').value.trim();
-
-      const atualizarProgresso = () => {
-        enviadas++;
-        document.getElementById('progress-bar').style.width = (enviadas/total*100) + '%';
-        if (enviadas === total) sucesso();
-      };
-
-      fotos.forEach((foto, i) => {
-        const r = new FileReader();
-        r.onload = () => {
-          const b = r.result.split(',')[1];
-          const dados = {
-            acao: "enviarFoto",
-            nota: nota,
-            placa: placaUsada,
-            motorista: motorista,
-            lat: lat,
-            lng: lng,
-            nome: `${nota}_${i+1}_${placaUsada}.jpg`,
-            file: b
-          };
-          fetch(URL, {
-            method: 'POST',
-            body: JSON.stringify(dados),
-            headers: { 'Content-Type': 'text/plain' }
-          })
-          .then(r => r.text())
-          .then(() => atualizarProgresso())
-          .catch(() => atualizarProgresso());
-        };
-        r.readAsDataURL(foto);
-      });
-
-      function sucesso() {
-        document.getElementById('ok').innerHTML="Tudo enviado! Abrindo WhatsApp...";
-        const msg = `Entrega ${nota} com ${total} foto(s)!\nMotorista: ${motorista}\nPlaca: ${placaUsada}\nLocal: https://maps.google.com/?q=${lat},${lng}`;
-        window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
-        setTimeout(() => location.reload(), 3000);
-      }
     }
   </script>
 </body>
