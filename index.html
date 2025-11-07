@@ -99,17 +99,18 @@
       const placa = document.getElementById('placa').value.trim();
       if (!placa) return alert("Digite a placa!");
       if (!validarPlaca(placa)) return alert("Placa inválida!");
-
+    
       document.getElementById('msg').innerHTML = "Verificando na planilha...";
       const btn = event.target;
       btn.disabled = true;
-
+    
       const dados = { acao: "verificarPlaca", placa };
-
+    
       fetch('https://script.google.com/macros/s/AKfycbywbHsf4VNXKUplR4U_IDx9B-ya_HSRXYCSjeKE2VJzbGl3_75E7_42cuzqsLgcDOWooA/exec', {
         method: 'POST',
         body: JSON.stringify(dados),
-        headers: {'Content-Type': 'text/plain'}
+        headers: { 'Content-Type': 'application/json' }, // CORRIGIDO AQUI
+        mode: 'no-cors'
       })
       .then(r => r.text())
       .then(t => {
@@ -268,7 +269,7 @@
             nome: `${nota}_${i+1}_${placaUsada}.jpg`,
             file: b
           };
-          fetch('https://script.google.com/macros/s/AKfycbwXgliQSLGFW7-TMuR-7op280UddFVujLITFmR6zDPC__s3TGX_1iWR0P0bN3Ola_Em-w/exec', {
+          fetch('https://script.google.com/macros/s/AKfycby7ttTXz1yOkdhdzK0owk_Odh-xmsbuhsgKFRmVWZw_02BuOKYZT8dVD88z7ekoZ1OCMg/exec', {
             method: 'POST',
             body: JSON.stringify(dados),
             headers: {'Content-Type': 'text/plain'},
