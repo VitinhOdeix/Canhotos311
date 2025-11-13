@@ -5,13 +5,13 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Extra Transportes</title>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
-  <script src="https://html2canvas.hertzen.com/dist/html2canvas.min.js"></script>
   <style>
     body{font-family:Arial;background:#f8f9fa;margin:0;padding:20px;text-align:center}
     .c{background:#fff;max-width:420px;margin:auto;padding:30px;border-radius:25px;box-shadow:0 15px 40px rgba(0,0,0,.2);overflow:hidden}
     .logo{width:280px;margin:20px auto;display:block}
     input,button{width:90%;padding:16px;margin:12px auto;display:block;border-radius:12px;border:2px solid #007bff;font-size:18px;box-sizing:border-box}
     button{background:#007bff;color:#fff;font-weight:bold;cursor:pointer}
+    button:disabled{background:#999;cursor:not-allowed}
     .fotos{display:flex;flex-wrap:wrap;gap:10px;justify-content:center;margin:15px 0}
     .foto-prev{width:100px;height:100px;object-fit:cover;border-radius:10px;border:2px solid #007bff;position:relative}
     .remover{position:absolute;top:5px;right:5px;background:red;color:white;border-radius:50%;width:20px;height:20px;font-size:12px;line-height:20px;cursor:pointer}
@@ -19,10 +19,12 @@
     #progress-bar{height:100%;width:0;background:#007bff;transition:width 0.3s}
     #ok{margin-top:15px;font-weight:bold;color:green}
     h2{color:#007bff}
+    .obs p{font-size:14px;line-height:1.5;margin:10px 0}
+    .exemplo-container{width:90%;max-width:400px;margin:20px auto;border:2px dashed #007bff;border-radius:12px;overflow:hidden;background:#f0f8ff;padding:10px;box-sizing:border-box}
+    .exemplo-img{width:100%;height:auto;max-height:300px;object-fit:contain;border-radius:8px;display:block;margin:0 auto}
     #loading{display:none;position:fixed;top:50%;left:50%;transform:translate(-50%,-50%);background:rgba(0,123,255,0.9);color:white;padding:20px;border-radius:10px;font-size:16px;z-index:9999;text-align:center}
     .spinner{border:3px solid rgba(255,255,255,0.3);border-top:3px solid white;border-radius:50%;width:20px;height:20px;animation:spin 1s linear infinite;margin:0 auto 10px}
     @keyframes spin{0%{transform:rotate(0deg)}100%{transform:rotate(360deg)}}
-    .marca-template{display:none}
   </style>
 </head>
 <body>
@@ -33,6 +35,9 @@
     <div class="obs">
       <p>Fotos devem ser nítidas e bem iluminadas.<br>
       Todas as fotos serão convertidas em um único PDF.</p>
+      <div class="exemplo-container">
+        <img src="exemplo.jpg" alt="Foto de exemplo" class="exemplo-img" onerror="this.style.display='none'">
+      </div>
     </div>
 
     <input type="text" id="placa" placeholder="Placa (ex: ABC1D23)" maxlength="7">
@@ -51,26 +56,11 @@
     Gerando PDF e enviando...
   </div>
 
-  <!-- Template invisível para marca d'água -->
-  <div class="marca-template" id="marcaTemplate">
-    <div style="position:absolute;bottom:20px;right:20px;background:rgba(0,0,0,0.6);color:white;padding:10px 15px;border-radius:8px;font-size:14px;line-height:1.4;text-align:right">
-      <div style="color:#00ff00;font-weight:bold;font-size:18px">ENTREGUE</div>
-      <div id="dataHoraMarca"></div>
-      <div id="gpsMarca" style="color:#ffff00"></div>
-    </div>
-  </div>
-
   <script>
     const { jsPDF } = window.jspdf;
     let fotos = [], lat = null, lng = null, gpsPronto = false;
     let placaValida = false;
 
-    const URL_VERIFICACAO_PLACAS = 'https://script.google.com/macros/s/AKfycbwx02Qirtq2QNhzvR1ACqF4W_ZmBHcS3NgVvVDe1MEg2HnHtNJxWdvpWfP-mSyASuGimw/exec';
-    const URL_SALVAR_ENTREGA = 'https://script.google.com/macros/s/AKfycbyRmh9QJDbHkSKAVMmZNfeiTfyvDhyB8qa48yBnvjEbGaPH4IN7UKB-sRMSlhe5Yjrz-Q/exec';
-
-    // ... [todo o código de validação de placa que você já tem permanece igual até a função iniciar()] ...
-
-    // === CÓDIGO DE VALIDAÇÃO DE PLACA (mantido 100% igual ao seu) ===
     const inputPlaca = document.getElementById('placa');
     const inputMotorista = document.getElementById('motorista');
     const inputNota = document.getElementById('nota');
@@ -79,8 +69,18 @@
     const btnEnviar = document.getElementById('env');
     const okMsg = document.getElementById('ok');
 
-    function bloquearFormulario() { /* seu código */ }
-    function liberarFormulario() { /* seu código */ }
+    const URL_VERIFICACAO_PLACAS = 'https://script.google.com/macros/s/AKfycbxcXdc2CTi0ForXHDcDpyvau1wLXJ4wjO2uTLx84nxSG0hhNDYVU5LmYb4u5PKOS-Yt-w/exec';
+    const URL_SALVAR_ENTREGA = 'https://script.google.com/macros/s/AKfycbx11QXhOXz-oSM7JzjUSiBZ1AqrVhvE4eH6tohjNSCdM7R1zMdjr7CFCLgXb5ny0iDCMg/exec';
+
+    function bloquearFormulario() {
+      inputMotorista.disabled = true; inputNota.disabled = true;
+      btnIniciar.style.display = 'none'; containerFotos.style.display = 'none'; btnEnviar.style.display = 'none';
+    }
+    function liberarFormulario() {
+      inputMotorista.disabled = false; inputNota.disabled = false;
+      btnIniciar.style.display = 'block'; containerFotos.style.display = 'block';
+      okMsg.innerHTML = '<span style="color:green">Placa válida! Preencha os dados.</span>';
+    }
     bloquearFormulario();
 
     inputPlaca.addEventListener('input', function(e) {
@@ -93,16 +93,26 @@
       }
     });
 
+    // ←←← AQUI ESTÁ A CORREÇÃO QUE RESOLVE O "VERIFICANDO INFINITAMENTE" ←←←
     function verificarPlacaNoGoogleSheets(placa) {
       okMsg.innerHTML = '<span style="color:#007bff">Verificando placa...</span>';
-      fetch(URL_VERIFICACAO_PLACAS).then(r=>r.json()).then(data=>{
-        if (data.placas && data.placas.includes(placa)) {
-          placaValida = true; liberarFormulario();
-        } else {
-          placaValida = false; bloquearFormulario();
-          okMsg.innerHTML = '<span style="color:red">Placa não autorizada!</span>';
-        }
-      }).catch(()=>{ okMsg.innerHTML = '<span style="color:red">Erro de conexão.</span>'; bloquearFormulario(); });
+      fetch(URL_VERIFICACAO_PLACAS + '?placa=' + encodeURIComponent(placa))
+        .then(r => { if (!r.ok) throw new Error('HTTP '+r.status); return r.json(); })
+        .then(data => {
+          if (data.autorizada === true) {
+            placaValida = true;
+            liberarFormulario();
+          } else {
+2 {
+            placaValida = false;
+            bloquearFormulario();
+            okMsg.innerHTML = '<span style="color:red">Placa não autorizada!</span>';
+          }
+        })
+        .catch(() => {
+          okMsg.innerHTML = '<span style="color:red">Erro de conexão. Tente novamente.</span>';
+          bloquearFormulario();
+        });
     }
 
     function formatarDataHora() {
@@ -113,7 +123,6 @@
     function iniciar() {
       if (!placaValida) return alert("Placa não validada!");
       if (!inputMotorista.value.trim() || !inputNota.value.trim()) return alert("Preencha todos os campos!");
-      
       if (!gpsPronto) {
         navigator.geolocation.getCurrentPosition(pos => {
           lat = pos.coords.latitude.toFixed(6);
@@ -121,9 +130,7 @@
           gpsPronto = true;
           tirarFoto();
         }, () => alert("Permitir GPS é obrigatório!"));
-      } else {
-        tirarFoto();
-      }
+      } else tirarFoto();
     }
 
     function tirarFoto() {
@@ -132,10 +139,10 @@
       i.onchange = e => {
         const file = e.target.files[0];
         if (!file) return;
-        const div = document.createElement('div');
-        div.className = 'foto-prev';
+        const div = document.createElement('div'); div.className = 'foto-prev';
         const img = document.createElement('img');
         img.src = URL.createObjectURL(file);
+        img.style.width = img.style.height = '100%'; img.style.objectFit = 'cover';
         const remover = document.createElement('div');
         remover.textContent = '×'; remover.className = 'remover';
         remover.onclick = () => { fotos = fotos.filter(f => f !== file); div.remove(); atualizarBotao(); };
@@ -151,49 +158,38 @@
       btnEnviar.style.display = fotos.length > 0 ? 'block' : 'none';
     }
 
-    // === NOVA FUNÇÃO PRINCIPAL: GERA PDF E ENVIA ===
     async function gerarPDFeEnviar() {
       if (fotos.length === 0) return alert("Adicione pelo menos uma foto!");
-
       document.getElementById('loading').style.display = 'block';
-      btnEnviar.disabled = true;
+      btnEnviar.disabled = true; btnEnviar.textContent = "Gerando PDF...";
 
-      const pdf = new jsPDF();
+      const pdf = new jsPDF('p', 'mm', 'a4');
       const dataHora = formatarDataHora();
-      document.getElementById('dataHoraMarca').textContent = dataHora;
-      document.getElementById('gpsMarca').textContent = `${lat}, ${lng}`;
 
       for (let i = 0; i < fotos.length; i++) {
         const file = fotos[i];
-        const imgUrl = URL.createObjectURL(file);
         const img = new Image();
-        img.src = imgUrl;
-
-        await new Promise(resolve => img.onload = resolve);
+        img.src = URL.createObjectURL(file);
+        await new Promise(r => img.onload = r);
 
         const canvas = document.createElement('canvas');
         const ctx = canvas.getContext('2d');
-        canvas.width = img.width;
-        canvas.height = img.height;
+        canvas.width = img.width; canvas.height = img.height;
         ctx.drawImage(img, 0, 0);
 
-        // Adiciona marca d'água no canvas
+        // Marca d'água
         ctx.fillStyle = 'rgba(0,0,0,0.6)';
-        ctx.fillRect(canvas.width - 180, canvas.height - 90, 170, 80);
-        ctx.font = 'bold 24px Arial';
-        ctx.fillStyle = '#00ff00';
-        ctx.textAlign = 'right';
-        ctx.fillText('ENTREGUE', canvas.width - 15, canvas.height - 55);
-        ctx.font = '14px Arial';
-        ctx.fillStyle = '#ffffff';
-        ctx.fillText(dataHora, canvas.width - 15, canvas.height - 35);
+        ctx.fillRect(canvas.width - 190, canvas.height - 95, 180, 85);
+        ctx.font = 'bold 26px Arial'; ctx.fillStyle = '#00ff00'; ctx.textAlign = 'right';
+        ctx.fillText('ENTREGUE', canvas.width - 15, canvas.height - 60);
+        ctx.font = '16px Arial'; ctx.fillStyle = '#ffffff';
+        ctx.fillText(dataHora, canvas.width - 15, canvas.height - 38);
         ctx.fillStyle = '#ffff00';
         ctx.fillText(`${lat}, ${lng}`, canvas.width - 15, canvas.height - 15);
 
         const imgData = canvas.toDataURL('image/jpeg', 0.95);
-
         if (i > 0) pdf.addPage();
-        pdf.addImage(imgData, 'JPEG', 5, 5, 200, 0); // largura fixa 200mm, altura proporcional
+        pdf.addImage(imgData, 'JPEG', 0, 0, 210, 297);
       }
 
       const pdfBlob = pdf.output('blob');
@@ -204,11 +200,10 @@
           nota: inputNota.value.trim(),
           placa: inputPlaca.value.trim(),
           motorista: inputMotorista.value.trim(),
-          lat: lat,
-          lng: lng,
+          lat: lat, lng: lng,
           nome: `${inputNota.value.trim()}_${inputPlaca.value.trim()}.pdf`,
           file: base64,
-          tipo: 'pdf'  // sinaliza pro Apps Script que é PDF
+          tipo: 'pdf'
         };
 
         fetch(URL_SALVAR_ENTREGA, {
@@ -218,7 +213,7 @@
           mode: 'no-cors'
         }).then(() => {
           document.getElementById('loading').style.display = 'none';
-          okMsg.innerHTML = "PDF enviado com sucesso!";
+          okMsg.innerHTML = "<span style='color:green'>PDF enviado com sucesso!</span>";
           const msg = `Entrega ${dados.nota} • ${fotos.length} foto(s) em PDF\nMotorista: ${dados.motorista}\nPlaca: ${dados.placa}\nhttps://maps.google.com/?q=${lat},${lng}`;
           window.open(`https://wa.me/?text=${encodeURIComponent(msg)}`, '_blank');
           setTimeout(() => location.reload(), 4000);
